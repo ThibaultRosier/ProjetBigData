@@ -945,16 +945,19 @@ def selectByType(colType: DataType, df: DataFrame) = {
   df.select(cols: _*)  
 }  
   
-val res = selectByType(StringType, df)  
-val timestamp = selectByType(TimestampType, df)  
-val joinResTmstmp = res.join(timestamp)  
-  
-for (i <- res.columns) {  
-  for (j <- res.columns) {  
-    if (i!=j) {  
-      joinResTmstmp.groupBy(w,col(i),col(j)).count().orderBy("window").show(5)  
-    }  
-  }  
+val res = selectByType(StringType, df)
+//On creer un dataframe timestamp
+val timestamp = selectByType(TimestampType, df)
+//on reunit res et timestamp
+val joinResTmstmp = res.join(timestamp)
+
+//on groupe by sur joinResTmstmp pour pouvoir groupby sur la fenetre temporel
+for (i <- res.columns) {
+  for (j <- res.columns) {
+    if (i!=j) {
+      joinResTmstmp.groupBy(w,col(i),col(j)).count().orderBy("window").show(5)
+    }
+  }
 }
 ```
 
