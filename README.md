@@ -933,8 +933,8 @@ ___
 ### Partie 4
 
 La solution suivante marche pour de petit echantillons mais provoque sur les gros fichiers:
-.soit une erreur (chez corentin) 
-.soit une execution infini (>2h30 chez thibault)
+- soit une erreur (chez corentin) 
+- soit une exécution infini (>2h30 chez thibault)
 
 ```scala
 val w = window($"timestamp", "1 Minute")  
