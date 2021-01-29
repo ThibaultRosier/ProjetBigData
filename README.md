@@ -568,6 +568,8 @@ ___
 
 #### Question 2
 
+Nous avons décidé pour cette question de ne pas automatiser le traitement avec des boucles
+
 ```scala
 //Calcule le nombre de connexion entre un PC source et un PC destination pour chaque protocole  
 val nbConProt = df.groupBy("PC_src", "PC_dest", "protocole").count().as("NBConProt")  
@@ -629,7 +631,7 @@ ___
 #### Question 3
 
 ```scala
-//Definie une fenetre temporelle de 5min
+//Définie une fenêtre temporelle de 5min
 val w = window($"timestamp", "5 Minute")
 
 val nbConnexion2 = df.groupBy(w,col("PC_src"), col("PC_dest")).count().as("NBConnexions").orderBy("window")
@@ -710,6 +712,8 @@ ___
 
 ### Partie 3
 
+Pour cette partie, on a créé une fonction permettant de récupérer uniquement les colonnes de types STRING.
+Une fois les colonnes récupérées, on va faire deux boucles imbriquées afin d'avoir toutes les paires possibles.
 
 ```scala
 def selectByType(colType: DataType, df: DataFrame) = {  
@@ -1024,6 +1028,8 @@ ___
 #### Question 4
 
 ```scala
+
+// On cherche à récupérer les arcs des PC sources
 val sumTempSRC = graph.edges.groupBy("src").agg(sum(  
     col("count(NB_paquets)")+  
     col("avg(NB_paquets)")+  
@@ -1031,25 +1037,28 @@ val sumTempSRC = graph.edges.groupBy("src").agg(sum(
     col("sum(NB_paquets)")+  
     col("min(NB_paquets)")+  
     col("max(NB_paquets)")).as("Somme totale src"))  
-  
+    
+//On cherche à récupérer les arcs des PC destinations    
 val sumTempDEST = graph.edges.groupBy("dst").agg(sum(  
     col("count(NB_paquets)")+  
     col("avg(NB_paquets)")+  
     col("stddev_samp(NB_paquets)")+  
     col("sum(NB_paquets)")+  
     col("min(NB_paquets)")+  
-    col("max(NB_paquets)")).as("Somme totale dst"))  
-  
+    col("max(NB_paquets)")).as("Somme totale dst")) 
+    
+//On joint les deux dataframes obtenus au dessus  
 val sumS = sumTempSRC.join(sumTempDEST, sumTempSRC("src") === sumTempDEST("dst"), "outer")  
   .groupBy("src", "dst")  
   .agg(sum(col("Somme totale src") + col("Somme totale dst")).as("Somme Totale"))  
   
+//On sélectionne ce que l'on veut afficher, puis on filtre afin de ne pas avoir les valeurs null. On renomme ensuite la colonne 
 sumS.select("src","dst", "Somme Totale").filter($"src".isNotNull && $"dst".isNotNull)  
   .drop("dst").withColumnRenamed("src", "PC")  
   .show(5)
 ```
 
-Les NaN du résultat suivant sont du au nombres trop grand pour la limite de spark
+Les NaN du résultat suivant sont dù au nombres trop grand pour la limite de spark
 
 |    PC|      Somme Totale|
 |------|------------------|
@@ -1065,23 +1074,29 @@ ___
 #### Question 1
 
 ```scala
-//Creer les dataframes des pc src et dest en enlevant les doublons et en 'id' correpondre au demande de grapheframe  
+//Creer les dataframes des pc src et dest en enlevant les doublons et en 'id' correpondre aux demandes de grapheframe  
 var vertex1 = df.select("PC_src").distinct().withColumnRenamed("PC_src","id")  
 var vertex2 = df.select("PC_dest").distinct().withColumnRenamed("PC_dest","id")  
   
-  
-//Reunie vertex1 et vertex2 pour avoir l'integralité des sommets (en supprimant les doublons)  
-val vertex = vertex1.union(vertex2).distinct()
+//Jointure de vertex1 et vertex2 pour avoir l'integralité des sommets (en supprimant les doublons)
 
-//Recupere df dans edge avant renommage  
+var vertex = vertex1.join(vertex2,vertex1("id1") === vertex2("id2"),"outer")
+// on choisit une jointure externe afin de conserver les colonnes contenant des null
+vertex = vertex.withColumn("id1", coalesce(vertex("id1"), vertex("id2"))) 
+// On fait en sorte que si la colonne id1 contient un null, cette valeur est remplacé par celle contenu dans la colonne id2
+vertex = vertex.drop("id2").withColumnRenamed("id1", "id") 
+// on supprime la colonne id2 qui n'est plus utile et on renomme la colonne id1 par id afin de corresepondre aux attentes de graphframe
+
+
+//Recupère df dans edge avant renommage  
 var edge = df.select(col("*"))  
   
-// Renomme les colonnes en 'src' et 'dst' pour correpondre au demande de grapheframe  
+// Renomme les colonnes en 'src' et 'dst' pour correpondre aux demandes de grapheframe  
 edge = edge  
   .withColumnRenamed("PC_src","src")  
   .withColumnRenamed("PC_dest","dst")  
   
-//Créer le graphe avec vertex pour les sommets et edge pour les arcs  
+//Créé le graphe avec vertex pour les sommets et edge pour les arcs  
 val graph = GraphFrame(vertex,edge)
 
 ```
@@ -1091,12 +1106,13 @@ ___
 #### Question 2
 
 ```scala
-//Affiche les nombres d'arc entrant par sommets  
+//Affiche le nombre d'arcs entrants par sommets  
 graph.inDegrees.show(5)  
   
-//Affiche les nombres d'arc sortant par sommets  
+//Affiche le nombre d'arcs sortants par sommets  
 graph.outDegrees.show(5)
 ```
+On voit dans ces tableaux le nombre d'arcs entrants et sortants de chaque sommet du graphe.
 
 
 |    id|inDegree|
@@ -1120,6 +1136,7 @@ graph.outDegrees.show(5)
 #### Question 3
 
 ```scala
+//On cherche à récupérer les arcs des PC sources
 val sumTempSRC = graph.edges.groupBy("src").agg(  
   mean("NB_paquets").as("mean_paquets"),  
   sum("NB_paquets").as("sum_paquets"),  
@@ -1127,7 +1144,7 @@ val sumTempSRC = graph.edges.groupBy("src").agg(
   max("NB_paquets").as("max_paquets"))  
   .withColumn("PC", col("src"))  
   
-  
+//On cherche à récupérer les arcs des PC destinataires  
 val sumTempDST = graph.edges.groupBy("dst").agg(  
   mean("NB_paquets").as("mean_paquets"),  
   sum("NB_paquets").as("sum_paquets"),  
@@ -1136,15 +1153,17 @@ val sumTempDST = graph.edges.groupBy("dst").agg(
   .withColumn("PC", col("dst"))  
   
   
-  
+//On réunit les deux tables obtenus juste avant en regroupant par PC puis on fait les opérations d'aggrégation
 var sumTemp = sumTempSRC.union(sumTempDST).distinct()  
 sumTemp = sumTemp.groupBy("PC").agg(min("min_paquets"),  
   mean("mean_paquets"),  
   max("max_paquets"),  
   sum("sum_paquets"))  
   
+//On affiche le résultat obtenu
 sumTemp.show(5)
 ```
+On observe dans ce tableau les résultats des opérations d'aggrégations sur chaque sommets du graphe.
 
 |    PC|MIN|              MEAN|   MAX|     SUM|
 |------|---|------------------|------|--------|
@@ -1158,10 +1177,14 @@ ___
 
 #### Question 4
 
-
+On remarque que les résultats obtenus par rapport à la question 4 du graphe 1 sont complètement différents.
+De plus, on ne récupère de données Nan. 
 ___
 
 #### Question 5
+
+On va afficher ici, l'id des sommets ainsi que le nombre de triangle qu'ils peuvent former avec leur voisins.
+Nous n'avons pas trouvé de solutions pour faire les opérations d'aggrégations sur les arcs des sommets faisant parti d'un cycle de 3 sommets.
 
 ```scala
     var trigraph = graph.triangleCount.run
